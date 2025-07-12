@@ -391,6 +391,59 @@ def generate_plasma(width, height):
     img.putdata(pixels)
     return img
 
+from PIL import Image
+
+@register_generator("mandelbrot")
+def generate_mandelbrot(width=256, height=256, max_iter=100, **kwargs):
+    img = Image.new("RGB", (width, height))
+    pixels = img.load()
+
+    x_min, x_max = -2.5, 1
+    y_min, y_max = -1.25, 1.25
+
+    for x in range(width):
+        for y in range(height):
+            zx = x / width * (x_max - x_min) + x_min
+            zy = y / height * (y_max - y_min) + y_min
+            z = complex(0, 0)
+            c = complex(zx, zy)
+
+            i = 0
+            while abs(z) <= 2 and i < max_iter:
+                z = z*z + c
+                i += 1
+
+            color = 255 - int(i * 255 / max_iter)
+            pixels[x, y] = (color, color, color)
+
+    return img
+
+@register_generator("burning_ship")
+def generate_burning_ship(width=256, height=256, max_iter=100, **kwargs):
+    img = Image.new("RGB", (width, height))
+    pixels = img.load()
+
+    x_min, x_max = -2.5, 1
+    y_min, y_max = -1.25, 1.25
+
+    for x in range(width):
+        for y in range(height):
+            zx = x / width * (x_max - x_min) + x_min
+            zy = y / height * (y_max - y_min) + y_min
+            z = complex(0, 0)
+            c = complex(zx, zy)
+
+            i = 0
+            while abs(z) <= 2 and i < max_iter:
+                z = complex(abs(z.real), abs(z.imag))
+                z = z*z + c
+                i += 1
+
+            color = 255 - int(i * 255 / max_iter)
+            pixels[x, y] = (color, color, color)
+
+    return img
+
 @image.command(help="Generate synthetic images")
 async def generate(ctx, mode: str=None, width: int=256, height: int=256):
     if mode is None:
