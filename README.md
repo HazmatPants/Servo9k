@@ -1,4 +1,5 @@
-# Servo9k
+# Servo9000
+> aka Servo9k
 
 A modular, multipurpose Discord bot written in Python using `discord.py`.  
 Servo9k features include procedural image generation, image effects, and math evaluation with a clean plugin-like structure for adding new commands and behaviors.
