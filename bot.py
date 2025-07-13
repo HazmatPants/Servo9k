@@ -1,5 +1,5 @@
 from discord.ext import commands
-from PIL import Image, ImageOps, ImageFilter, ImageEnhance
+from PIL import Image, ImageOps, ImageFilter, ImageEnhance, ImageDraw
 import discord
 import json
 import os
@@ -8,6 +8,7 @@ import datetime
 import difflib
 import math
 import random
+import numpy as np
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -22,6 +23,17 @@ IMAGE_GENERATORS = {}
 IMAGE_EFFECTS = {}
 
 # === Other Functions ===
+
+def parse_kwargs(args):
+    kwargs = {}
+    for arg in args:
+        if "=" in arg:
+            k, v = arg.split("=", 1)
+            try:
+                kwargs[k] = eval(v, {"__builtins": {}})
+            except:
+                kwargs[k] = v
+    return kwargs
 
 def register_generator(name):
     def decorator(func):
@@ -336,14 +348,7 @@ async def effect(ctx, mode: str=None, *args):
         await ctx.send("Please attach an image or reply to a message with an image.")
         return
 
-    kwargs = {}
-    for arg in args:
-        if "=" in arg:
-            k, v = arg.split("=", 1)
-            try:
-                kwargs[k] = eval(v, {"__builtins": {}})
-            except:
-                kwargs[k] = v
+    kwargs = parse_kwargs(args)
 
     msg = await ctx.send("Applying effect...")
     img = IMAGE_EFFECTS[mode](image_bytes, **kwargs)
@@ -444,25 +449,103 @@ def generate_burning_ship(width=256, height=256, max_iter=100, **kwargs):
 
     return img
 
+@register_generator("sierpinski_triangle")
+def generate_sierpinski(width=256, height=256, iterations=10000, **kwargs):
+    img = Image.new("RGB", (width, height), "black")
+    draw = ImageDraw.Draw(img)
+
+    p1 = (width // 2, 0)
+    p2 = (0, height - 1)
+    p3 = (width - 1, height - 1)
+    vertices = [p1, p2, p3]
+
+    x, y = random.randint(0, width), random.randint(0, height)
+
+    for _ in range(iterations):
+        target = random.choice(vertices)
+        x = (x + target[0]) // 2
+        y = (y + target[1]) // 2
+        draw.point((x, y), fill="white")
+
+    return img
+
+from PIL import Image, ImageDraw
+import math
+
+@register_generator("koch_snowflake")
+def generate_koch_snowflake(width=512, height=512, iterations=4, **kwargs):
+    img = Image.new("RGB", (width, height), "black")
+    draw = ImageDraw.Draw(img)
+
+    size = min(width, height) * 0.8
+    height_triangle = size * math.sqrt(3) / 2
+
+    p1 = ((width - size) / 2, height / 2 + height_triangle / 3)
+    p2 = ((width + size) / 2, height / 2 + height_triangle / 3)
+    p3 = (width / 2, height / 2 - 2 * height_triangle / 3)
+
+    def koch_curve(draw, p1, p2, iter):
+        if iter == 0:
+            draw.line([p1, p2], fill="white")
+            return
+
+        dx = (p2[0] - p1[0]) / 3
+        dy = (p2[1] - p1[1]) / 3
+
+        a = p1
+        b = (p1[0] + dx, p1[1] + dy)
+        d = (p1[0] + 2 * dx, p1[1] + 2 * dy)
+        e = p2
+
+        angle = math.radians(60)
+        cx = b[0] + math.cos(angle) * (d[0] - b[0]) - math.sin(angle) * (d[1] - b[1])
+        cy = b[1] + math.sin(angle) * (d[0] - b[0]) + math.cos(angle) * (d[1] - b[1])
+        c = (cx, cy)
+
+        koch_curve(draw, a, b, iter - 1)
+        koch_curve(draw, b, c, iter - 1)
+        koch_curve(draw, c, d, iter - 1)
+        koch_curve(draw, d, e, iter - 1)
+
+    koch_curve(draw, p1, p2, iterations)
+    koch_curve(draw, p2, p3, iterations)
+    koch_curve(draw, p3, p1, iterations)
+
+    return img
+
 @image.command(help="Generate synthetic images")
-async def generate(ctx, mode: str=None, width: int=256, height: int=256):
+async def generate(ctx, mode: str=None, width: int=256, height: int=256, *args):
     if mode is None:
         await ctx.send(
         """
         ```
         Image Generate Syntax
         Synopsis:
-        s9k image generate <mode> [width] [height]
+        s9k image generate <mode> [width] [height] [key=value]...
 
         If width/height is not provided, it will default to 256.
 
         Modes:
         "white_noise": Grayscale static, like TV static
+        Params: None
         "color_noise": Random color noise
+        Params: None
         "plasma": Wavy colorful noise using sine waves
+        Params: None
+        "sierpinski_triangle": An equilateral triangle subdivided recursively into smaller equilateral triangles.
+        Params: [iterations=10000]
+        "koch_snowflake": A spiky, infinitely detailed, starry snowflake shape made of smaller and smaller triangle bumps.
+        Params: [iterations=4]
 
+
+        Slow Modes: (These are slower as they require complex math)
+        "manelbrot": A complex, endlessly detailed shape with bulbous, rounded blobs connected by thin filaments,
+        Params: [max_iter=100]
+        "burning_ship": A fiery, jagged, and ship-like structure, with flame-like tendrils, sharp edges, and mirrored symmetry.
+        The Burning Ship fractal is very mathematically similar to the Mandelbrot set, yet looks completely different.
+        [max_iter=10]
         Example Command:
-        s9k image generate color_noise 128 128
+        s9k image generate mandelbrot 128 128 max_iter=100
         ```
         """)
         return
@@ -475,8 +558,10 @@ async def generate(ctx, mode: str=None, width: int=256, height: int=256):
         return
 
     try:
+        kwargs = parse_kwargs(args)
+
         msg = await ctx.send("Generating...")
-        img = IMAGE_GENERATORS[mode](width, height)
+        img = IMAGE_GENERATORS[mode](width, height, **kwargs)
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         buf.seek(0)

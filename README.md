@@ -34,6 +34,7 @@ You can also apply image effects by replying to a message with an image.
 - Python 3.10+
 - `discord.py`
 - Pillow
+- `numpy`
 
 Install dependencies:
 ```bash
